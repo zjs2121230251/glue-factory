@@ -12,6 +12,7 @@ from einops import rearrange, repeat
 from thop import profile
 from torch.nn import init as init
 
+from func import window_partitionx, window_reversex
 # from model_archs.TTST_arc import Attention as TSA
 # from model_archs.layer import *
 # from model_archs.comm import *
@@ -280,11 +281,11 @@ class VSSBlock(nn.Module):
         self.drop_path = DropPath(drop_path)
         self.skip_scale= nn.Parameter(torch.ones(hidden_dim))
 
-        #self.hybridgate = HybridGate(dim=hidden_dim, mlp_ratio=2.)
-        self.fft_branch = frequency_selection(dim=hidden_dim)
+        ##self.hybridgate = HybridGate(dim=hidden_dim, mlp_ratio=2.)
+        ##self.fft_branch = frequency_selection(dim=hidden_dim)
         # self.frequencyCA = MultiSpectralAttentionLayer(channel=hidden_dim, dct_h=21, dct_w=21)
-        self.ln_2 = nn.LayerNorm(hidden_dim)
-        self.skip_scale2 = nn.Parameter(torch.ones(hidden_dim))
+        ##self.ln_2 = nn.LayerNorm(hidden_dim)
+        ##self.skip_scale2 = nn.Parameter(torch.ones(hidden_dim))
 
 
 
@@ -299,62 +300,11 @@ class VSSBlock(nn.Module):
         x = input*self.skip_scale + fft0 + self.drop_path(self.self_attention(x))#全局模块输出y
         # x = input*self.skip_scale + self.drop_path(self.self_attention(x))
         # print(000, x.size())
-        fft = x.permute(0, 3, 1, 2).contiguous()
-        fft = self.fft_branch(fft)
-        fft = fft.permute(0, 2, 3, 1).contiguous()
+        ## fft = x.permute(0, 3, 1, 2).contiguous()
+        ##fft = self.fft_branch(fft)
+        ##fft = fft.permute(0, 2, 3, 1).contiguous()
         # x = x*self.skip_scale2 + self.conv_blk(self.ln_2(x).permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1).contiguous()
-        x = x*self.skip_scale2 + fft + self.hybridgate(self.ln_2(x).permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1).contiguous()  # B H W C
-
-        x = x.view(B, -1, C).contiguous()
-        return x
-    
-
-class VSSBlock(nn.Module):
-    def __init__(
-            self,
-            hidden_dim: int = 0,
-            drop_path: float = 0,
-            norm_layer: Callable[..., torch.nn.Module] = partial(nn.LayerNorm, eps=1e-6),
-            attn_drop_rate: float = 0,
-            d_state: int = 16,
-            expand: float = 2.,
-            is_light_sr: bool = False,
-            **kwargs,
-    ):
-        super().__init__()
-        self.ln_1 = norm_layer(hidden_dim)
-        self.self_attention = SS2D(d_model=hidden_dim, d_state=d_state, expand=expand,dropout=attn_drop_rate, **kwargs)
-        self.fft_branch0 = frequency_selection(dim=hidden_dim)
-
-        # self.self_attention = UV
-
-        self.drop_path = DropPath(drop_path)
-        self.skip_scale= nn.Parameter(torch.ones(hidden_dim))
-
-        self.hybridgate = HybridGate(dim=hidden_dim, mlp_ratio=2.)
-        self.fft_branch = frequency_selection(dim=hidden_dim)
-        self.frequencyCA = MultiSpectralAttentionLayer(channel=hidden_dim, dct_h=21, dct_w=21)
-        self.ln_2 = nn.LayerNorm(hidden_dim)
-        self.skip_scale2 = nn.Parameter(torch.ones(hidden_dim))
-
-
-
-    def forward(self, input, x_size):
-        # x [B,HW,C]
-        B, L, C = input.shape
-        input = input.view(B, *x_size, C).contiguous()  # [B,H,W,C]
-        fft0 = self.fft_branch0(input.permute(0, 3, 1, 2).contiguous())#G_FSM
-        fft0 = fft0.permute(0, 2, 3, 1).contiguous()
-
-        x = self.ln_1(input)  # B H W C
-        x = input*self.skip_scale + fft0 + self.drop_path(self.self_attention(x))#全局模块输出y
-        # x = input*self.skip_scale + self.drop_path(self.self_attention(x))
-        # print(000, x.size())
-        fft = x.permute(0, 3, 1, 2).contiguous()
-        fft = self.fft_branch(fft)
-        fft = fft.permute(0, 2, 3, 1).contiguous()
-        # x = x*self.skip_scale2 + self.conv_blk(self.ln_2(x).permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1).contiguous()
-        x = x*self.skip_scale2 + fft + self.hybridgate(self.ln_2(x).permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1).contiguous()  # B H W C
+        ##x = x*self.skip_scale2 + fft + self.hybridgate(self.ln_2(x).permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1).contiguous()  # B H W C
 
         x = x.view(B, -1, C).contiguous()
         return x
